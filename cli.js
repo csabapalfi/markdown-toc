@@ -4,8 +4,8 @@ var fs = require('fs');
 var toc = require('./index.js');
 var utils = require('./lib/utils');
 var args = utils.minimist(process.argv.slice(2), {
-  boolean: ['i', 'json', 'firsth1', 'stripHeadingTags'],
-  string: ['append', 'bullets', 'indent'],
+  boolean: ['i', 'json', 'check', 'firsth1', 'stripHeadingTags'],
+  string: ['append', 'bullets', 'indent', 'skip'],
   default: {
     firsth1: true,
     stripHeadingTags: true
@@ -24,6 +24,9 @@ if (args._.length !== 1) {
     '',
     '  --json:       Print the TOC in JSON format',
     '',
+    '  --check:      Check whether the TOC is up to date. Print the result to stdout and',
+    '                exit with status 1 if the TOC is outdated.',
+    '',
     '  --append:     Append a string to the end of the TOC',
     '',
     '  --bullets:    Bullets to use for items in the generated TOC',
@@ -37,7 +40,7 @@ if (args._.length !== 1) {
     '',
     '  --no-stripHeadingTags: Do not strip extraneous HTML tags from heading',
     '                         text before slugifying',
-    '',  
+    '',
     '  --indent:     Provide the indentation to use - defaults to \'  \'',
     '                (to specify a tab, use the bash-escaped $\'\\t\')'
   ].join('\n'));
@@ -54,11 +57,26 @@ if (args.i && args._[0] === '-') {
   process.exit(1);
 }
 
+if (args.skip) {
+  args.filter = function removeJunk(str, ele, arr) {
+    return str.indexOf(args.skip) === -1;
+  }
+}
+
 var input = process.stdin;
 if (args._[0] !== '-') input = fs.createReadStream(args._[0]);
 
 input.pipe(utils.concat(function(input) {
-  if (args.i) {
+  if (args.check) {
+    var original = input.toString()
+    var newMarkdown = toc.insert(original, args);
+    if (newMarkdown === original) {
+      console.log('TOC is up to date')
+    } else {
+      console.log('TOC is out of date')
+      process.exit(1)
+    }
+  } else if (args.i) {
     var newMarkdown = toc.insert(input.toString(), args);
     fs.writeFileSync(args._[0], newMarkdown);
   } else {
